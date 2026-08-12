@@ -1,17 +1,24 @@
-import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from app.main import main
-from app.services.scanner_service import run_scan
+import importlib.util
 
 
-def test_scanner_returns_success():
-    result = run_scan()
-    assert result.status == "SUCCESS"
-    assert result.message == "Scan completed successfully"
+# Load app/main.py directly so tests work consistently on Windows, Linux,
+# local machines, and GitHub-hosted runners without relying on PYTHONPATH.
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+MAIN_FILE = PROJECT_ROOT / "app" / "main.py"
+
+spec = importlib.util.spec_from_file_location("app_main", MAIN_FILE)
+if spec is None or spec.loader is None:
+    raise ImportError(f"Unable to load application module: {MAIN_FILE}")
+
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+add = module.add
 
 
-def test_main_returns_zero():
-    assert main() == 0
+def test_add():
+    assert add(2, 3) == 5
+
+
+def test_add_negative():
+    assert add(-2, 3) == 1
