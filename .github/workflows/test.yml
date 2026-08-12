@@ -19,8 +19,14 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
       - name: Install dependencies
-        run: python -m pip install -r requirements.txt
+        run: python -m pip install -r requirements.txt pytest requests
+
+      - name: Verify dependencies
+        run: python -c "import pytest, requests; print('pytest and requests OK')"
 
       - name: Verify application import
         run: python -c "import app; import app.main; print('Application import OK')"
