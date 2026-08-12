@@ -16,6 +16,8 @@ def main() -> int:
     logger.info("%s", result.message)
 
     telegram = TelegramService()
+    logger.info("Telegram configured: %s", telegram.is_configured())
+
     if telegram.is_configured():
         message = (
             "🤖 Python GitHub Actions\n\n"
@@ -24,10 +26,15 @@ def main() -> int:
             f"Scanner: {result.status}\n"
             f"Message: {result.message}"
         )
-        telegram.send_message(message)
-        logger.info("Telegram notification sent successfully")
+        try:
+            telegram.send_message(message)
+            logger.info("Telegram API: HTTP 200 / message accepted")
+            logger.info("Telegram notification sent successfully")
+        except Exception as exc:
+            logger.error("Telegram notification failed: %s", exc)
+            return 1
     else:
-        logger.info("Telegram not configured; notification skipped")
+        logger.warning("Telegram not configured; notification skipped")
 
     logger.info("Application completed")
     return 0
