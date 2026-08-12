@@ -1,15 +1,17 @@
 import sys
 from pathlib import Path
 
-# Make the repository root importable in every environment.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.main import add
+from app.main import main
+from app.services.scanner_service import run_scan
 
 
-def test_add():
-    assert add(2, 3) == 5
+def test_scanner_returns_success():
+    result = run_scan()
+    assert result.status == "SUCCESS"
+    assert result.message == "Scan completed successfully"
 
 
-def test_add_negative():
-    assert add(-2, 3) == 1
+def test_main_returns_zero():
+    assert main() == 0
