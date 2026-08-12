@@ -1,4 +1,5 @@
 import os
+from typing import Any
 
 import requests
 
@@ -25,5 +26,26 @@ class TelegramService:
             json={"chat_id": self.chat_id, "text": message},
             timeout=15,
         )
-        response.raise_for_status()
-        return bool(response.json().get("ok"))
+
+        # Keep diagnostics safe: never log the bot token.
+        if response.status_code != 200:
+            try:
+                details: Any = response.json()
+                description = details.get("description", "Unknown Telegram API error")
+            except ValueError:
+                description = response.text[:200]
+            raise RuntimeError(
+                f"Telegram API returned HTTP {response.status_code}: {description}"
+            )
+
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise RuntimeError("Telegram API returned invalid JSON") from exc
+
+        if not data.get("ok"):
+            raise RuntimeError(
+                f"Telegram API rejected the message: {data.get('description', 'Unknown error')}"
+            )
+
+        return True
