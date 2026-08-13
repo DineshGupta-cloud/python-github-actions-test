@@ -40,3 +40,9 @@ def test_qualifies_requires_bullish_structure_and_fall_range():
     )
 
     assert scanner.qualifies(candidate) is True
+
+
+def test_scan_universe_returns_tuple_and_handles_multiple_symbols():
+    scanner = StockScanner(market_data=FakeMarketData())
+    results = scanner.scan_universe(["AAA", "BBB"])
+    assert isinstance(results, tuple)
