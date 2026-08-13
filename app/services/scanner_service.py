@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from app.config import get_settings
 from app.services.market_data_service import MarketDataService
+from app.services.nse_universe import NSE_FNO_SYMBOLS
 from app.services.technical_analysis_service import TechnicalAnalysisService
 
 
@@ -11,6 +12,7 @@ from app.services.technical_analysis_service import TechnicalAnalysisService
 class ScanResult:
     status: str
     message: str
+    candidates: tuple["ScanCandidate", ...] = ()
 
 
 @dataclass(frozen=True)
@@ -49,7 +51,30 @@ class StockScanner:
             and candidate.bullish_structure
         )
 
+    def scan_universe(self, symbols: list[str] | None = None) -> tuple[ScanCandidate, ...]:
+        candidates: list[ScanCandidate] = []
+        for symbol in symbols or NSE_FNO_SYMBOLS:
+            try:
+                candidate = self.scan_symbol(symbol)
+                if self.qualifies(candidate):
+                    candidates.append(candidate)
+            except Exception:
+                # One bad ticker/data response must not stop the entire scan.
+                continue
+
+        candidates.sort(key=lambda item: abs(item.fall_pct), reverse=True)
+        return tuple(candidates[: self.settings.top_results])
+
 
 def run_scan() -> ScanResult:
-    """Health-check entry point; stock universe scanning is added next."""
-    return ScanResult(status="SUCCESS", message="Scanner service ready")
+    scanner = StockScanner()
+    candidates = scanner.scan_universe()
+    if not candidates:
+        return ScanResult(status="SUCCESS", message="No qualifying stocks found")
+
+    symbols = ", ".join(candidate.symbol for candidate in candidates)
+    return ScanResult(
+        status="SUCCESS",
+        message=f"Found {len(candidates)} qualifying stocks: {symbols}",
+        candidates=candidates,
+    )
