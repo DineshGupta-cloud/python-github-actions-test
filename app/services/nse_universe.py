@@ -1,0 +1,21 @@
+"""NSE F&O starter universe used by the scanner.
+
+Keep this list in code for now so GitHub Actions has no dependency on a
+separate file or external universe service. It can be refreshed later.
+"""
+
+NSE_FNO_SYMBOLS = [
+    "ADANIENT", "ADANIPORTS", "APOLLOHOSP", "ASIANPAINT", "AXISBANK",
+    "BAJAJ-AUTO", "BAJAJFINSV", "BAJFINANCE", "BEL", "BHARTIARTL",
+    "BPCL", "BRITANNIA", "CIPLA", "COALINDIA", "DRREDDY", "EICHERMOT",
+    "ETERNAL", "GRASIM", "HCLTECH", "HDFCBANK", "HDFCLIFE", "HEROMOTOCO",
+    "HINDALCO", "HINDUNILVR", "ICICIBANK", "ICICIGI", "ICICIPRULI",
+    "INDHOTEL", "INDUSINDBK", "INFY", "IOC", "ITC", "JIOFIN", "JSWSTEEL",
+    "KOTAKBANK", "LAURUSLABS", "LICI", "LT", "M&M", "MARUTI", "MAXHEALTH",
+    "MOTHERSON", "NESTLEIND", "NTPC", "ONGC", "PERSISTENT", "PETRONET",
+    "PFC", "PIDILITIND", "PIIND", "PNB", "POWERGRID", "RECLTD", "RELIANCE",
+    "SBILIFE", "SBIN", "SHRIRAMFIN", "SIEMENS", "SUNPHARMA", "TATACONSUM",
+    "TATAMOTORS", "TATASTEEL", "TCS", "TECHM", "TITAN", "TORNTPHARM",
+    "TRENT", "TVSMOTOR", "ULTRACEMCO", "UNITEDSPIRITS", "VEDL", "WIPRO",
+    "ZYDUSLIFE", "DEVYANI",
+]
