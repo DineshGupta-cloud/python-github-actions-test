@@ -6,34 +6,27 @@ from app.utils.logger import configure_logging
 
 def build_telegram_message(result) -> str:
     lines = [
-        "📈 *NSE F&O REVERSAL SCANNER*",
+        "📈 NSE F&O REVERSAL SCANNER",
         "━━━━━━━━━━━━━━━━━━━━",
-        "",
-        f"*{result.message}*",
+        f"{result.message}",
         "",
     ]
 
-    for index, candidate in enumerate(result.candidates, start=1):
-        lines.extend(
-            [
-                f"{index}. *{candidate.symbol}* {candidate.signal}",
-                f"💰 Price: ₹{candidate.price}",
-                f"📉 52W High: ₹{candidate.high_52w}",
-                f"📉 Fall: {candidate.fall_pct}%",
-                f"📈 EMA9: ₹{candidate.ema9}",
-                f"📈 EMA25: ₹{candidate.ema25}",
-                f"📈 EMA99: ₹{candidate.ema99}",
-                f"📊 RSI: {candidate.rsi}",
-                f"📊 Volume Ratio: {candidate.volume_ratio}x",
-                f"⭐ Score: {candidate.score}/100",
-                f"🔄 9/25 Cross: {'YES' if candidate.ema9_25_cross else 'NO'}",
-                f"🔄 25/99 Cross: {'YES' if candidate.ema25_99_cross else 'NO'}",
-                f"📐 Near EMA99: {'YES' if candidate.ema99_distance_pct <= 15 else 'NO'}",
-                "",
-            ]
+    # Telegram alert: send only the top 10 candidates to keep it concise.
+    for index, candidate in enumerate(result.candidates[:10], start=1):
+        lines.append(
+            f"{index}. {candidate.symbol} {candidate.signal} | "
+            f"₹{candidate.price} | Fall {candidate.fall_pct}% | "
+            f"EMA {candidate.ema9}/{candidate.ema25}/{candidate.ema99} | "
+            f"RSI {candidate.rsi} | Score {candidate.score}"
         )
 
-    lines.extend(["━━━━━━━━━━━━━━━━━━━━", "⚠️ Technical scanner only"])
+    if not result.candidates:
+        lines.append("No matching stocks found.")
+    elif len(result.candidates) > 10:
+        lines.append(f"\n+ {len(result.candidates) - 10} more candidates in logs.")
+
+    lines.extend(["", "━━━━━━━━━━━━━━━━━━━━", "⚠️ Technical scanner only"])
     return "\n".join(lines)
 
 
@@ -71,8 +64,8 @@ def main() -> int:
             logger.info("Telegram API: HTTP 200 / message accepted")
             logger.info("Telegram notification sent successfully")
         except Exception as exc:
-            logger.error("Telegram notification failed: %s", exc)
-            return 1
+            # Telegram failure must not make the scanner fail.
+            logger.warning("Telegram notification skipped: %s", exc)
     else:
         logger.warning("Telegram not configured; notification skipped")
 
