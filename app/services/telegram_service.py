@@ -5,7 +5,9 @@ import requests
 
 
 class TelegramService:
-    """Send messages to a Telegram chat/channel using a bot token."""
+    """Send messages to Telegram safely within the Bot API message limit."""
+
+    MAX_MESSAGE_LENGTH = 4000
 
     def __init__(self, bot_token: str | None = None, chat_id: str | None = None):
         self.bot_token = bot_token or os.getenv("TELEGRAM_BOT_TOKEN")
@@ -20,14 +22,25 @@ class TelegramService:
                 "Telegram is not configured. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID."
             )
 
+        message = str(message).strip()
+        if not message:
+            return True
+
+        # Telegram allows up to 4096 characters. Keep a safety margin.
+        if len(message) > self.MAX_MESSAGE_LENGTH:
+            message = message[: self.MAX_MESSAGE_LENGTH - 20].rstrip() + "\n...truncated"
+
         url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
         response = requests.post(
             url,
-            json={"chat_id": self.chat_id, "text": message},
+            json={
+                "chat_id": self.chat_id,
+                "text": message,
+                "disable_web_page_preview": True,
+            },
             timeout=15,
         )
 
-        # Keep diagnostics safe: never log the bot token.
         if response.status_code != 200:
             try:
                 details: Any = response.json()
