@@ -1,64 +1,55 @@
 import os
-from typing import Any
 
 import requests
 
 
 class TelegramService:
-    """Send messages to Telegram safely within the Bot API message limit."""
+    """Send short Telegram notifications safely."""
 
-    MAX_MESSAGE_LENGTH = 4000
+    MAX_LENGTH = 3000
 
-    def __init__(self, bot_token: str | None = None, chat_id: str | None = None):
-        self.bot_token = bot_token or os.getenv("TELEGRAM_BOT_TOKEN")
-        self.chat_id = chat_id or os.getenv("TELEGRAM_CHAT_ID")
+    def __init__(self):
+        self.bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+        self.chat_id = os.getenv("TELEGRAM_CHAT_ID")
 
     def is_configured(self) -> bool:
         return bool(self.bot_token and self.chat_id)
 
     def send_message(self, message: str) -> bool:
         if not self.is_configured():
-            raise RuntimeError(
-                "Telegram is not configured. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID."
-            )
+            raise RuntimeError("Telegram is not configured")
 
-        message = str(message).strip()
+        message = str(message).strip()[: self.MAX_LENGTH]
+
         if not message:
             return True
 
-        # Telegram allows up to 4096 characters. Keep a safety margin.
-        if len(message) > self.MAX_MESSAGE_LENGTH:
-            message = message[: self.MAX_MESSAGE_LENGTH - 20].rstrip() + "\n...truncated"
-
         url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+
         response = requests.post(
             url,
-            json={
+            data={
                 "chat_id": self.chat_id,
                 "text": message,
-                "disable_web_page_preview": True,
             },
             timeout=15,
         )
 
         if response.status_code != 200:
             try:
-                details: Any = response.json()
-                description = details.get("description", "Unknown Telegram API error")
+                description = response.json().get("description", response.text)
             except ValueError:
-                description = response.text[:200]
+                description = response.text
+
             raise RuntimeError(
                 f"Telegram API returned HTTP {response.status_code}: {description}"
             )
 
-        try:
-            data = response.json()
-        except ValueError as exc:
-            raise RuntimeError("Telegram API returned invalid JSON") from exc
+        data = response.json()
 
         if not data.get("ok"):
             raise RuntimeError(
-                f"Telegram API rejected the message: {data.get('description', 'Unknown error')}"
+                f"Telegram API rejected message: {data.get('description', 'Unknown error')}"
             )
 
         return True
