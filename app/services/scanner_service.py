@@ -42,7 +42,7 @@ class ScanCandidate:
 
 
 class StockScanner:
-    """NSE F&O reversal scanner based on the supplied strategy."""
+    """NSE F&O scanner requiring bullish 9/25 and 25/99 crossover conditions."""
 
     def __init__(self, market_data: MarketDataService | None = None):
         self.market_data = market_data or MarketDataService()
@@ -74,11 +74,11 @@ class StockScanner:
             return None
 
         close = df["Close"]
-        df["EMA9"] = close.ewm(span=self.settings.ema_fast, adjust=False).mean()
-        df["EMA25"] = close.ewm(span=self.settings.ema_medium, adjust=False).mean()
-        df["EMA99"] = close.ewm(span=self.settings.ema_slow, adjust=False).mean()
+        df["EMA9"] = close.ewm(span=9, adjust=False).mean()
+        df["EMA25"] = close.ewm(span=25, adjust=False).mean()
+        df["EMA99"] = close.ewm(span=99, adjust=False).mean()
         df["RSI"] = self._rsi(close, self.settings.rsi_period)
-        df["AvgVolume20"] = df["Volume"].rolling(self.settings.volume_period).mean()
+        df["AvgVolume20"] = df["Volume"].rolling(20).mean()
 
         latest = df.iloc[-1]
         previous = df.iloc[-2]
@@ -94,6 +94,7 @@ class StockScanner:
         high_52w = float(df["High"].max())
         fall_pct = ((high_52w - price) / high_52w) * 100
 
+        # Both bullish crossovers are required.
         bullish_9_25_cross = bool(
             previous["EMA9"] <= previous["EMA25"]
             and latest["EMA9"] > latest["EMA25"]
@@ -115,45 +116,26 @@ class StockScanner:
         recent_low = float(df["Low"].tail(20).min())
         previous_20_low = float(df["Low"].iloc[-40:-20].min())
         higher_low = recent_low > previous_20_low
-
         ema25_rising = bool(latest["EMA25"] > df["EMA25"].iloc[-6])
         ema99_rising = bool(latest["EMA99"] > df["EMA99"].iloc[-10])
 
         score = 0
-        if fall_pct >= 25:
-            score += 20
-        if fall_pct >= 35:
-            score += 5
-        if fall_pct >= 50:
-            score += 5
-        if ema9_above_25:
-            score += 15
-        if bullish_9_25_cross:
-            score += 15
-        if ema25_above_99:
-            score += 10
-        if bullish_25_99_cross:
-            score += 15
-        if near_ema99:
-            score += 5
-        if volume_confirmation:
-            score += 5
-        if rsi_ok:
-            score += 5
-        if higher_low:
-            score += 5
-        if ema25_rising:
-            score += 5
+        if fall_pct >= 25: score += 20
+        if fall_pct >= 35: score += 5
+        if fall_pct >= 50: score += 5
+        if ema9_above_25: score += 15
+        if bullish_9_25_cross: score += 15
+        if ema25_above_99: score += 10
+        if bullish_25_99_cross: score += 15
+        if near_ema99: score += 5
+        if volume_confirmation: score += 5
+        if rsi_ok: score += 5
+        if higher_low: score += 5
+        if ema25_rising: score += 5
 
-        if bullish_9_25_cross and fall_pct >= self.settings.min_fall_percent:
-            signal = "🔥 FRESH 9/25 REVERSAL"
-        elif ema9_above_25 and fall_pct >= self.settings.min_fall_percent and ema25_rising:
-            signal = "🟢 RECOVERY"
-        elif near_ema99 and fall_pct >= self.settings.min_fall_percent:
-            signal = "🟡 EMA99 WATCH"
-        else:
-            signal = "WATCH"
-
+        # Only stocks with BOTH bullish crossovers are candidates.
+        if not (bullish_9_25_cross and bullish_25_99_cross):
+            return None
         if price < self.settings.min_price:
             return None
         if avg_volume < self.settings.min_avg_volume:
@@ -182,7 +164,7 @@ class StockScanner:
             ema25_rising=ema25_rising,
             ema99_rising=ema99_rising,
             score=score,
-            signal=signal,
+            signal="🔥 9/25/99 BULLISH CROSSOVER",
         )
 
     def qualifies(self, candidate: ScanCandidate | None) -> bool:
@@ -206,11 +188,11 @@ def run_scan() -> ScanResult:
     scanner = StockScanner()
     candidates = scanner.scan_universe()
     if not candidates:
-        return ScanResult(status="SUCCESS", message="No stocks matched the reversal criteria")
+        return ScanResult(status="SUCCESS", message="No stocks matched the 9/25/99 crossover criteria")
 
     symbols = ", ".join(candidate.symbol for candidate in candidates)
     return ScanResult(
         status="SUCCESS",
-        message=f"Found {len(candidates)} reversal candidates: {symbols}",
+        message=f"Found {len(candidates)} stocks with bullish 9/25/99 crossovers: {symbols}",
         candidates=candidates,
     )
