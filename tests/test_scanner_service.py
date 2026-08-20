@@ -6,20 +6,32 @@ from app.services.scanner_service import StockScanner
 
 class FakeMarketData:
     def fetch_daily(self, symbol: str, period: str = "1y"):
-        # Build a deterministic setup where BOTH genuine bullish crossovers
-        # happen within the last 10 trading sessions and the final order is:
-        # EMA9 > EMA25 > EMA99.
-        # 100 -> 90 creates the temporary bearish separation, then 130 creates
-        # the bullish reversal. The final price is within 10% of EMA99.
-        close = np.concatenate([
-            np.full(100, 100.0),
-            np.full(5, 90.0),
-            np.full(15, 130.0),
-        ])
+        # Deterministic data that satisfies the production scanner rules:
+        # 1) EMA9 > EMA25 > EMA99 at the end.
+        # 2) Genuine 9/25 bullish crossover within the last 10 sessions.
+        # 3) Genuine 25/99 bullish crossover within the last 10 sessions.
+        # 4) Spot price is within 10% of EMA99.
+        #
+        # The final move is intentionally close to EMA99 so the test does not
+        # accidentally depend on the old 52-week-fall/reversal condition.
+        close = np.array(
+            [100.0] * 106
+            + [80.0] * 5
+            + [110.0] * 9,
+            dtype=float,
+        )
         high = close + 2.0
         low = close - 2.0
         volume = np.full(len(close), 200_000.0)
-        return pd.DataFrame({"Close": close, "High": high, "Low": low, "Volume": volume})
+
+        return pd.DataFrame(
+            {
+                "Close": close,
+                "High": high,
+                "Low": low,
+                "Volume": volume,
+            }
+        )
 
 
 def test_scan_symbol_returns_ema_alignment_candidate():
@@ -28,7 +40,7 @@ def test_scan_symbol_returns_ema_alignment_candidate():
 
     assert candidate is not None
     assert candidate.symbol == "TEST"
-    assert candidate.price == 130.0
+    assert candidate.price == 110.0
     assert candidate.ema9 > candidate.ema25 > candidate.ema99
     assert candidate.ema9_above_25 is True
     assert candidate.ema25_above_99 is True
