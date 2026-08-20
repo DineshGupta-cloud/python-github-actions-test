@@ -42,7 +42,7 @@ class ScanCandidate:
 
 
 class StockScanner:
-    """NSE F&O scanner requiring bullish 9/25 and 25/99 crossover conditions."""
+    """EOD NSE F&O scanner using bullish EMA 9 > EMA 25 > EMA 99 alignment."""
 
     def __init__(self, market_data: MarketDataService | None = None):
         self.market_data = market_data or MarketDataService()
@@ -70,7 +70,7 @@ class StockScanner:
             return None
 
         df = df.dropna(subset=["Close", "High", "Low", "Volume"])
-        if len(df) < self.settings.ema_slow + 20:
+        if len(df) < 120:
             return None
 
         close = df["Close"]
@@ -94,21 +94,15 @@ class StockScanner:
         high_52w = float(df["High"].max())
         fall_pct = ((high_52w - price) / high_52w) * 100
 
-        # Both bullish crossovers are required.
-        bullish_9_25_cross = bool(
-            previous["EMA9"] <= previous["EMA25"]
-            and latest["EMA9"] > latest["EMA25"]
-        )
-        bullish_25_99_cross = bool(
-            previous["EMA25"] <= previous["EMA99"]
-            and latest["EMA25"] > latest["EMA99"]
-        )
+        # YES means the EMA relationship changed on the latest candle.
+        bullish_9_25_cross = bool(previous["EMA9"] <= previous["EMA25"] and ema9 > ema25)
+        bullish_25_99_cross = bool(previous["EMA25"] <= previous["EMA99"] and ema25 > ema99)
 
-        ema9_above_25 = ema9 > ema25
-        ema25_above_99 = ema25 > ema99
+        # Qualification is based on current order: EMA9 > EMA25 > EMA99.
+        bullish_alignment = ema9 > ema25 > ema99
+
         ema99_distance = abs(price - ema99) / ema99 * 100
         near_ema99 = ema99_distance <= self.settings.ema99_distance_percent
-
         volume_ratio = volume / avg_volume if avg_volume > 0 else 0
         volume_confirmation = volume_ratio >= 1.2
         rsi_ok = self.settings.rsi_min <= rsi <= self.settings.rsi_max
@@ -120,27 +114,28 @@ class StockScanner:
         ema99_rising = bool(latest["EMA99"] > df["EMA99"].iloc[-10])
 
         score = 0
-        if fall_pct >= 25: score += 20
-        if fall_pct >= 35: score += 5
-        if fall_pct >= 50: score += 5
-        if ema9_above_25: score += 15
-        if bullish_9_25_cross: score += 15
-        if ema25_above_99: score += 10
-        if bullish_25_99_cross: score += 15
-        if near_ema99: score += 5
-        if volume_confirmation: score += 5
-        if rsi_ok: score += 5
-        if higher_low: score += 5
-        if ema25_rising: score += 5
+        if bullish_alignment:
+            score += 40
+        if bullish_9_25_cross:
+            score += 15
+        if bullish_25_99_cross:
+            score += 15
+        if near_ema99:
+            score += 10
+        if volume_confirmation:
+            score += 5
+        if rsi_ok:
+            score += 5
+        if higher_low:
+            score += 5
+        if ema25_rising:
+            score += 5
 
-        # Only stocks with BOTH bullish crossovers are candidates.
-        if not (bullish_9_25_cross and bullish_25_99_cross):
+        if not bullish_alignment:
             return None
         if price < self.settings.min_price:
             return None
         if avg_volume < self.settings.min_avg_volume:
-            return None
-        if fall_pct < self.settings.min_fall_percent:
             return None
 
         return ScanCandidate(
@@ -158,13 +153,13 @@ class StockScanner:
             ema99_distance_pct=round(ema99_distance, 2),
             ema9_25_cross=bullish_9_25_cross,
             ema25_99_cross=bullish_25_99_cross,
-            ema9_above_25=ema9_above_25,
-            ema25_above_99=ema25_above_99,
+            ema9_above_25=True,
+            ema25_above_99=True,
             higher_low=higher_low,
             ema25_rising=ema25_rising,
             ema99_rising=ema99_rising,
             score=score,
-            signal="🔥 9/25/99 BULLISH CROSSOVER",
+            signal="🔥 9/25/99 BULLISH ALIGNMENT",
         )
 
     def qualifies(self, candidate: ScanCandidate | None) -> bool:
@@ -180,7 +175,7 @@ class StockScanner:
             except Exception:
                 continue
 
-        candidates.sort(key=lambda item: (item.score, item.fall_pct), reverse=True)
+        candidates.sort(key=lambda item: (item.score, -item.ema99_distance_pct), reverse=True)
         return tuple(candidates[: self.settings.top_results])
 
 
@@ -188,11 +183,11 @@ def run_scan() -> ScanResult:
     scanner = StockScanner()
     candidates = scanner.scan_universe()
     if not candidates:
-        return ScanResult(status="SUCCESS", message="No stocks matched the 9/25/99 crossover criteria")
+        return ScanResult(status="SUCCESS", message="No stocks matched EMA 9 > EMA 25 > EMA 99")
 
     symbols = ", ".join(candidate.symbol for candidate in candidates)
     return ScanResult(
         status="SUCCESS",
-        message=f"Found {len(candidates)} stocks with bullish 9/25/99 crossovers: {symbols}",
+        message=f"Found {len(candidates)} stocks with EMA 9 > EMA 25 > EMA 99: {symbols}",
         candidates=candidates,
     )
