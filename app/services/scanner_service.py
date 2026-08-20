@@ -42,7 +42,9 @@ class ScanCandidate:
 
 
 class StockScanner:
-    """EOD NSE F&O scanner using bullish EMA 9 > EMA 25 > EMA 99 alignment."""
+    """Independent EMA 9/25/99 EOD scanner."""
+
+    CROSS_LOOKBACK = 10
 
     def __init__(self, market_data: MarketDataService | None = None):
         self.market_data = market_data or MarketDataService()
@@ -57,6 +59,19 @@ class StockScanner:
         avg_loss = loss.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
         rs = avg_gain / avg_loss.replace(0, pd.NA)
         return 100 - (100 / (1 + rs))
+
+    @staticmethod
+    def _recent_bullish_cross(df: pd.DataFrame, fast: str, slow: str, lookback: int = 10) -> bool:
+        """True only when fast actually crossed from <= slow to > slow within lookback days."""
+        start = max(1, len(df) - lookback)
+        for i in range(start, len(df)):
+            previous_fast = float(df[fast].iloc[i - 1])
+            previous_slow = float(df[slow].iloc[i - 1])
+            current_fast = float(df[fast].iloc[i])
+            current_slow = float(df[slow].iloc[i])
+            if previous_fast <= previous_slow and current_fast > current_slow:
+                return True
+        return False
 
     def scan_symbol(self, symbol: str) -> ScanCandidate | None:
         data = self.market_data.fetch_daily(symbol, period=self.settings.period)
@@ -81,8 +96,6 @@ class StockScanner:
         df["AvgVolume20"] = df["Volume"].rolling(20).mean()
 
         latest = df.iloc[-1]
-        previous = df.iloc[-2]
-
         price = float(latest["Close"])
         ema9 = float(latest["EMA9"])
         ema25 = float(latest["EMA25"])
@@ -94,15 +107,17 @@ class StockScanner:
         high_52w = float(df["High"].max())
         fall_pct = ((high_52w - price) / high_52w) * 100
 
-        # YES means the EMA relationship changed on the latest candle.
-        bullish_9_25_cross = bool(previous["EMA9"] <= previous["EMA25"] and ema9 > ema25)
-        bullish_25_99_cross = bool(previous["EMA25"] <= previous["EMA99"] and ema25 > ema99)
-
-        # Qualification is based on current order: EMA9 > EMA25 > EMA99.
+        # Current alignment: 9 > 25 > 99.
         bullish_alignment = ema9 > ema25 > ema99
 
+        # These are genuine historical crossovers, not just the current ordering.
+        bullish_9_25_cross = self._recent_bullish_cross(df, "EMA9", "EMA25", self.CROSS_LOOKBACK)
+        bullish_25_99_cross = self._recent_bullish_cross(df, "EMA25", "EMA99", self.CROSS_LOOKBACK)
+
+        # Spot must be no more than 10% away from EMA99 in either direction.
         ema99_distance = abs(price - ema99) / ema99 * 100
-        near_ema99 = ema99_distance <= self.settings.ema99_distance_percent
+        near_ema99 = ema99_distance <= 10.0
+
         volume_ratio = volume / avg_volume if avg_volume > 0 else 0
         volume_confirmation = volume_ratio >= 1.2
         rsi_ok = self.settings.rsi_min <= rsi <= self.settings.rsi_max
@@ -131,11 +146,14 @@ class StockScanner:
         if ema25_rising:
             score += 5
 
+        # No 52-week-high/fall filter. This scanner is independent of the 52W scanner.
         if not bullish_alignment:
             return None
-        if price < self.settings.min_price:
+        if not bullish_9_25_cross or not bullish_25_99_cross:
             return None
-        if avg_volume < self.settings.min_avg_volume:
+        if not near_ema99:
+            return None
+        if price < self.settings.min_price or avg_volume < self.settings.min_avg_volume:
             return None
 
         return ScanCandidate(
@@ -153,13 +171,13 @@ class StockScanner:
             ema99_distance_pct=round(ema99_distance, 2),
             ema9_25_cross=bullish_9_25_cross,
             ema25_99_cross=bullish_25_99_cross,
-            ema9_above_25=True,
-            ema25_above_99=True,
+            ema9_above_25=ema9 > ema25,
+            ema25_above_99=ema25 > ema99,
             higher_low=higher_low,
             ema25_rising=ema25_rising,
             ema99_rising=ema99_rising,
             score=score,
-            signal="🔥 9/25/99 BULLISH ALIGNMENT",
+            signal="🔥 9/25/99 BULLISH CROSSOVER",
         )
 
     def qualifies(self, candidate: ScanCandidate | None) -> bool:
@@ -183,11 +201,11 @@ def run_scan() -> ScanResult:
     scanner = StockScanner()
     candidates = scanner.scan_universe()
     if not candidates:
-        return ScanResult(status="SUCCESS", message="No stocks matched EMA 9 > EMA 25 > EMA 99")
+        return ScanResult(status="SUCCESS", message="No stocks matched the 9/25/99 crossover and EMA99 distance conditions")
 
     symbols = ", ".join(candidate.symbol for candidate in candidates)
     return ScanResult(
         status="SUCCESS",
-        message=f"Found {len(candidates)} stocks with EMA 9 > EMA 25 > EMA 99: {symbols}",
+        message=f"Found {len(candidates)} stocks with genuine 9/25/99 crossovers near EMA99: {symbols}",
         candidates=candidates,
     )
