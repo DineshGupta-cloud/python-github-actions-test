@@ -6,12 +6,15 @@ from app.services.scanner_service import StockScanner
 
 class FakeMarketData:
     def fetch_daily(self, symbol: str, period: str = "1y"):
-        # Deliberately creates EMA9 > EMA25 > EMA99 at the end.
-        # The final section has small pullbacks so RSI remains valid.
-        i = np.arange(120, dtype=float)
+        # Build a deterministic setup where BOTH genuine bullish crossovers
+        # happen within the last 10 trading sessions and the final order is:
+        # EMA9 > EMA25 > EMA99.
+        # 100 -> 90 creates the temporary bearish separation, then 130 creates
+        # the bullish reversal. The final price is within 10% of EMA99.
         close = np.concatenate([
-            np.full(80, 100.0),
-            100.0 + (i[80:] - 80) * 1.0 + 2.0 * np.sin(i[80:]),
+            np.full(100, 100.0),
+            np.full(5, 90.0),
+            np.full(15, 130.0),
         ])
         high = close + 2.0
         low = close - 2.0
@@ -25,10 +28,13 @@ def test_scan_symbol_returns_ema_alignment_candidate():
 
     assert candidate is not None
     assert candidate.symbol == "TEST"
-    assert candidate.price > 100.0
+    assert candidate.price == 130.0
     assert candidate.ema9 > candidate.ema25 > candidate.ema99
     assert candidate.ema9_above_25 is True
     assert candidate.ema25_above_99 is True
+    assert candidate.ema9_25_cross is True
+    assert candidate.ema25_99_cross is True
+    assert candidate.ema99_distance_pct <= 10.0
     assert candidate.rsi >= 0
     assert candidate.avg_volume20 >= 100_000
 
