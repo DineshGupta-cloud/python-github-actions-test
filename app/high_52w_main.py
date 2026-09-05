@@ -10,9 +10,9 @@ def telegram_messages(result):
     header = (
         "🚀 NSE 52W HIGH MOMENTUM SCREENER\n"
         "📅 EOD\n"
-        "🎯 ALL filters must pass\n"
-        "• Distance from 52W High <= 15%\n"
-        "• Price > EMA20 > EMA50\n"
+        "🎯 PREFERRED MOMENTUM ZONES\n"
+        "• 0-3% from 52W High = Strongest Momentum Zone\n"
+        "• 3-7% from 52W High = Strong Watchlist\n"
         "• RSI > 55\n"
         "• Volume Ratio > 1.2x\n"
         f"{result.message}\n"
@@ -24,7 +24,7 @@ def telegram_messages(result):
             lines.extend([
                 f"{i}. {c.symbol}",
                 f"Price: ₹{c.price} | 52W High: ₹{c.high_52w} | Below High: {c.below_high_pct}%",
-                f"EMA20: ₹{c.ema20} | EMA50: ₹{c.ema50}",
+                f"Zone: {c.zone}",
                 f"RSI: {c.rsi} | Volume Ratio: {c.volume_ratio}x",
                 f"Score: {c.score}/100 | Signal: {c.signal}",
                 "",
