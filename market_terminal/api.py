@@ -2,10 +2,18 @@ from __future__ import annotations
 
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from pathlib import Path
 from .data import NIFTY50, screener, stock_snapshot, history
 
 app = FastAPI(title="NSE Market Terminal", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+STATIC_DIR = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+@app.get("/")
+def home(): return FileResponse(STATIC_DIR / "index.html")
 
 @app.get("/api/health")
 def health(): return {"status":"UP"}
